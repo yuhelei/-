@@ -1,0 +1,1744 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>番茄时钟 · Pomodoro</title>
+<style>
+  :root {
+    --bg: #f4f5f7;
+    --card: #ffffff;
+    --card-2: #fafafa;
+    --text: #23262d;
+    --text-2: #6b7280;
+    --line: #e5e7eb;
+    --focus: #e05252;
+    --short: #35a06b;
+    --long: #4a7de0;
+    --danger: #d94f4f;
+    --ring-focus: #e05252;
+    --ring-short: #35a06b;
+    --ring-long: #4a7de0;
+    --shadow: 0 2px 10px rgba(0,0,0,.06);
+  }
+  html[data-theme="dark"] {
+    --bg: #16171b;
+    --card: #212227;
+    --card-2: #1b1c20;
+    --text: #eceef1;
+    --text-2: #9aa0aa;
+    --line: #33353c;
+    --focus: #e06060;
+    --short: #46b37b;
+    --long: #5b8ceb;
+    --danger: #e06060;
+    --ring-focus: #e06060;
+    --ring-short: #46b37b;
+    --ring-long: #5b8ceb;
+    --shadow: 0 2px 10px rgba(0,0,0,.35);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    transition: background .25s, color .25s;
+  }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 24px 20px 48px; }
+
+  /* ===== 顶栏 ===== */
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 20px;
+  }
+  header h1 { font-size: 22px; font-weight: 700; letter-spacing: 1px; }
+  header h1 .tomato { color: var(--focus); }
+  .top-actions { display: flex; gap: 8px; }
+  .icon-btn {
+    background: var(--card); border: 1px solid var(--line); color: var(--text-2);
+    width: 38px; height: 38px; border-radius: 10px; cursor: pointer; font-size: 17px;
+    display: flex; align-items: center; justify-content: center;
+    transition: all .15s;
+  }
+  .icon-btn:hover { color: var(--text); border-color: var(--text-2); }
+
+  /* ===== 卡片通用 ===== */
+  .card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 16px; box-shadow: var(--shadow); padding: 20px;
+    margin-bottom: 16px;
+  }
+
+  /* ===== 模式切换（专注页内） ===== */
+  .modes { display: flex; gap: 8px; }
+  .mode-btn {
+    flex: 1; padding: 10px 0; border-radius: 10px; border: 1px solid var(--line);
+    background: var(--card); color: var(--text-2); font-size: 14px; cursor: pointer;
+    transition: all .15s; font-weight: 500; font-family: inherit;
+  }
+  .mode-btn:hover { color: var(--text); }
+  .mode-btn.active[data-mode="focus"] { background: var(--focus); border-color: var(--focus); color: #fff; }
+  .mode-btn.active[data-mode="short"] { background: var(--short); border-color: var(--short); color: #fff; }
+  .mode-btn.active[data-mode="long"]  { background: var(--long);  border-color: var(--long);  color: #fff; }
+
+  /* ===== 主页快捷开始卡片 ===== */
+  .start-card { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  .start-card .start-info { flex: 1; min-width: 220px; }
+  .start-card .start-title { font-size: 16px; font-weight: 700; margin-bottom: 6px; }
+  .start-card .start-sub { font-size: 13px; color: var(--text-2); }
+  .btn-start {
+    background: var(--focus); color: #fff; border: none; border-radius: 14px;
+    padding: 16px 40px; font-size: 17px; font-weight: 700; cursor: pointer;
+    font-family: inherit; transition: all .15s;
+  }
+  .btn-start:hover { filter: brightness(1.08); transform: translateY(-1px); }
+
+  /* ===== 专注计时页（全屏覆盖） ===== */
+  .focus-page {
+    position: fixed; inset: 0; z-index: 150; display: none;
+    flex-direction: column; align-items: center; overflow-y: auto;
+    background: #14161a; color: #fff;
+  }
+  .focus-page.show { display: flex; }
+  .focus-bg { position: fixed; inset: 0; z-index: -1; background-size: cover; background-position: center; }
+  .focus-bg::after { content: ""; position: absolute; inset: 0; background: linear-gradient(rgba(8,10,14,.38), rgba(8,10,14,.6)); }
+  .focus-topbar { width: 100%; max-width: 760px; display: flex; align-items: center; gap: 8px; padding: 18px 20px 0; }
+  .focus-topbar .modes { flex: 1; }
+  .focus-topbar .mode-btn { background: rgba(255,255,255,.12); border-color: rgba(255,255,255,.25); color: #fff; }
+  .focus-topbar .mode-btn:hover { background: rgba(255,255,255,.22); color: #fff; }
+  .focus-topbar .mode-btn.active[data-mode="focus"] { background: var(--ring-focus); border-color: var(--ring-focus); }
+  .focus-topbar .mode-btn.active[data-mode="short"] { background: var(--ring-short); border-color: var(--ring-short); }
+  .focus-topbar .mode-btn.active[data-mode="long"]  { background: var(--ring-long);  border-color: var(--ring-long); }
+  .focus-topbar .icon-btn { background: rgba(255,255,255,.12); border-color: rgba(255,255,255,.25); color: #fff; }
+  .focus-topbar .icon-btn:hover { color: #fff; border-color: rgba(255,255,255,.6); }
+  .focus-card {
+    flex: 1; display: flex; flex-direction: column; align-items: center;
+    justify-content: center; padding: 10px 20px 40px; width: 100%;
+  }
+  .focus-page .phase-label, .focus-page .focus-task-name { color: rgba(255,255,255,.75); }
+  .focus-page .time-display { color: #fff; text-shadow: 0 2px 14px rgba(0,0,0,.45); }
+  .focus-page .ring-bg { stroke: rgba(255,255,255,.18); }
+  .focus-page .btn-sub { background: rgba(255,255,255,.12); color: #fff; border-color: rgba(255,255,255,.25); }
+  .focus-page .btn-sub:hover { color: #fff; }
+  /* 专注页综合背景音控制区 */
+  .ambient-bar {
+    margin-top: 22px; padding: 14px 16px;
+    background: rgba(0,0,0,.28); border-radius: 14px;
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    display: flex; flex-direction: column; gap: 10px; min-width: 320px;
+  }
+  .ambient-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .ambient-label { color: rgba(255,255,255,.85); font-size: 13px; min-width: 56px; font-weight: 500; }
+  .ambient-row .vol { color: rgba(255,255,255,.8); display: flex; align-items: center; gap: 4px; font-size: 12px; }
+  .ambient-row .icon-btn:disabled { opacity: .35; cursor: not-allowed; }
+  /* 曲目选择弹出面板 */
+  .ambient-bar { position: relative; }
+  .track-pop {
+    display: none; position: absolute; left: 0; right: 0; top: calc(100% + 8px);
+    background: rgba(20, 22, 28, .82); border: 1px solid rgba(255,255,255,.14);
+    border-radius: 12px; padding: 6px; z-index: 40;
+    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    max-height: 172px; overflow-y: auto; box-shadow: 0 10px 32px rgba(0,0,0,.4);
+    scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.3) transparent;
+  }
+  .track-pop::-webkit-scrollbar { width: 5px; }
+  .track-pop::-webkit-scrollbar-thumb { background: rgba(255,255,255,.28); border-radius: 3px; }
+  .track-pop::-webkit-scrollbar-track { background: transparent; }
+  .track-pop.open { display: block; }
+  .track-item {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding: 8px 12px; border-radius: 8px; cursor: pointer;
+    color: rgba(255,255,255,.82); font-size: 13px; line-height: 1.4;
+  }
+  .track-item:hover { background: rgba(255,255,255,.12); }
+  .track-item.active { background: rgba(255,255,255,.18); color: #fff; font-weight: 600; }
+  .track-item .track-playing { font-size: 11px; color: rgba(255,255,255,.55); }
+  /* 专注页底部名人名句 */
+  .quote-bar {
+    position: absolute; left: 0; right: 0; bottom: 18px; z-index: 20;
+    display: flex; justify-content: center; align-items: baseline; padding: 0 56px;
+    pointer-events: none;                                  /* 不挡背景点击，内部元素单独恢复 */
+  }
+  .quote-inner {
+    pointer-events: auto; position: relative; max-width: 760px; text-align: center;
+    font-size: 13px; line-height: 1.8; color: rgba(255,255,255,.75);
+    text-shadow: 0 1px 10px rgba(0,0,0,.65);
+  }
+  .quote-inner .q-author { font-size: 12px; color: rgba(255,255,255,.55); margin-left: 6px; }
+  .quote-shuffle {
+    pointer-events: auto; margin-left: 6px; padding: 1px 6px; font-size: 12px; line-height: 1.5;
+    background: rgba(255,255,255,.1); color: rgba(255,255,255,.8);
+    border: 1px solid rgba(255,255,255,.2); border-radius: 10px; cursor: pointer;
+    opacity: 0; transition: opacity .25s; vertical-align: baseline;
+  }
+  .quote-inner:hover .quote-shuffle { opacity: 1; }
+  .quote-shuffle:hover { background: rgba(255,255,255,.2); }
+  .focus-foot { font-size: 12px; color: rgba(255,255,255,.55); margin-top: 18px; text-align: center; line-height: 1.8; }
+  .ring-box { position: relative; width: 240px; height: 240px; margin: 8px 0 18px; }
+  .ring-box svg { transform: rotate(-90deg); }
+  .ring-bg { fill: none; stroke: var(--line); stroke-width: 12; }
+  .ring-fg { fill: none; stroke: var(--ring-focus); stroke-width: 12; stroke-linecap: round; transition: stroke-dashoffset .3s linear, stroke .3s; }
+  .ring-center {
+    position: absolute; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; text-align: center; padding: 0 24px;
+  }
+  .phase-label { font-size: 13px; color: var(--text-2); letter-spacing: 2px; margin-bottom: 4px; }
+  .time-display { font-size: 52px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: 1px; }
+  .focus-task-name { font-size: 12px; color: var(--text-2); margin-top: 6px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .controls { display: flex; gap: 12px; }
+  .btn {
+    border: none; border-radius: 12px; padding: 12px 34px; font-size: 16px;
+    font-weight: 600; cursor: pointer; transition: all .15s; font-family: inherit;
+  }
+  .btn-main { background: var(--focus); color: #fff; min-width: 130px; }
+  .btn-main:hover { filter: brightness(1.08); }
+  .btn-sub { background: var(--card-2); color: var(--text-2); border: 1px solid var(--line); }
+  .btn-sub:hover { color: var(--text); }
+
+  /* ===== 任务列表 ===== */
+  .section-title { font-size: 15px; font-weight: 700; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center; }
+  .section-title .hint { font-size: 12px; color: var(--text-2); font-weight: 400; }
+  .task-input-row { display: flex; gap: 8px; margin-bottom: 12px; }
+  .task-input-row input {
+    flex: 1; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--line);
+    background: var(--card-2); color: var(--text); font-size: 14px; font-family: inherit; outline: none;
+  }
+  .task-input-row input:focus { border-color: var(--focus); }
+  .btn-add {
+    padding: 10px 20px; border: none; border-radius: 10px; background: var(--focus);
+    color: #fff; font-size: 14px; cursor: pointer; font-weight: 600; font-family: inherit;
+  }
+  .btn-add:hover { filter: brightness(1.08); }
+  ul.task-list { list-style: none; }
+  ul.task-list li {
+    display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+    border-radius: 10px; border: 1px solid var(--line); margin-bottom: 8px;
+    background: var(--card-2); transition: all .15s;
+  }
+  ul.task-list li.current { border-color: var(--focus); box-shadow: 0 0 0 1px var(--focus) inset; }
+  ul.task-list li.done .task-name { text-decoration: line-through; color: var(--text-2); }
+  .task-check {
+    width: 20px; height: 20px; border-radius: 6px; border: 2px solid var(--line);
+    cursor: pointer; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+    font-size: 12px; color: #fff; transition: all .15s; background: transparent;
+  }
+  .task-check.checked { background: var(--short); border-color: var(--short); }
+  .task-name { flex: 1; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .task-pomo { font-size: 12px; color: var(--focus); font-weight: 600; flex-shrink: 0; }
+  .task-btn {
+    border: 1px solid var(--line); background: transparent; color: var(--text-2);
+    border-radius: 8px; padding: 4px 10px; font-size: 12px; cursor: pointer; flex-shrink: 0;
+    font-family: inherit; transition: all .15s;
+  }
+  .task-btn:hover { color: var(--text); }
+  .task-btn.select { color: var(--focus); border-color: var(--focus); }
+  .task-btn.del:hover { color: var(--danger); border-color: var(--danger); }
+  .empty-tip { color: var(--text-2); font-size: 13px; text-align: center; padding: 14px 0; }
+
+  /* ===== 统计 ===== */
+  .stats-row { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+  .stat-item {
+    flex: 1; min-width: 130px; background: var(--card-2); border: 1px solid var(--line);
+    border-radius: 12px; padding: 14px; text-align: center;
+  }
+  .stat-item .num { font-size: 26px; font-weight: 700; color: var(--focus); font-variant-numeric: tabular-nums; }
+  .stat-item .lbl { font-size: 12px; color: var(--text-2); margin-top: 4px; }
+  .chart { display: flex; align-items: flex-end; justify-content: space-between; gap: 6px; height: 110px; padding-top: 8px; }
+  .chart-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; height: 100%; justify-content: flex-end; }
+  .chart-bar {
+    width: 70%; max-width: 34px; background: var(--focus); border-radius: 6px 6px 2px 2px;
+    min-height: 2px; opacity: .85; transition: height .3s; position: relative;
+  }
+  .chart-bar .bar-num { position: absolute; top: -18px; left: 50%; transform: translateX(-50%); font-size: 11px; color: var(--text-2); }
+  .chart-day { font-size: 11px; color: var(--text-2); }
+  .chart-day.today { color: var(--focus); font-weight: 700; }
+
+  /* ===== 日历 ===== */
+  .cal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .cal-month { font-size: 15px; font-weight: 700; }
+  .cal-nav { display: flex; gap: 6px; }
+  .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 14px; }
+  .cal-dow { font-size: 11px; color: var(--text-2); text-align: center; padding: 4px 0; }
+  .cal-cell {
+    aspect-ratio: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    border-radius: 8px; cursor: pointer; font-size: 13px; border: 1px solid transparent;
+    position: relative; transition: background .15s, color .15s; user-select: none;
+  }
+  .cal-cell:hover { background: var(--card-2); }
+  .cal-cell.other { color: var(--text-2); opacity: .4; }
+  .cal-cell.today { border-color: var(--focus); font-weight: 700; }
+  .cal-cell.selected { background: var(--focus); color: #fff; border-color: var(--focus); }
+  .cal-cell .pomo-dot {
+    position: absolute; bottom: 4px; right: 4px; width: 6px; height: 6px; border-radius: 50%;
+    background: var(--short);
+  }
+  .cal-cell.selected .pomo-dot { background: #fff; }
+  .cal-todo-title { font-size: 13px; color: var(--text-2); margin-bottom: 10px; }
+
+  /* ===== 滑块 ===== */
+  .vol { display: flex; align-items: center; gap: 6px; margin-left: auto; font-size: 12px; color: var(--text-2); }
+  input[type=range] { accent-color: var(--focus); cursor: pointer; }
+
+  /* ===== 设置弹窗 ===== */
+  .modal-mask {
+    position: fixed; inset: 0; background: rgba(0,0,0,.45); display: none;
+    align-items: center; justify-content: center; z-index: 100; padding: 20px;
+  }
+  .modal-mask.show { display: flex; }
+  .modal {
+    background: var(--card); border-radius: 16px; padding: 24px; width: 400px; max-width: 100%;
+    border: 1px solid var(--line); max-height: 88vh; overflow-y: auto;
+  }
+  .modal h2 { font-size: 16px; margin-bottom: 18px; }
+  .form-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; font-size: 14px; gap: 10px; }
+  .form-row input[type=number] {
+    width: 70px; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line);
+    background: var(--card-2); color: var(--text); font-family: inherit; text-align: center;
+  }
+  .form-row input[type=color] {
+    width: 44px; height: 32px; padding: 2px; border-radius: 8px; border: 1px solid var(--line);
+    background: var(--card-2); cursor: pointer;
+  }
+  .switch { position: relative; width: 42px; height: 24px; flex-shrink: 0; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .switch .slider {
+    position: absolute; inset: 0; border-radius: 24px; background: var(--line);
+    cursor: pointer; transition: .2s;
+  }
+  .switch .slider::before {
+    content: ""; position: absolute; width: 18px; height: 18px; border-radius: 50%;
+    left: 3px; top: 3px; background: #fff; transition: .2s; box-shadow: 0 1px 3px rgba(0,0,0,.25);
+  }
+  .switch input:checked + .slider { background: var(--focus); }
+  .switch input:checked + .slider::before { transform: translateX(18px); }
+  .divider { height: 1px; background: var(--line); margin: 14px 0; }
+  .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+  .link-btn {
+    background: none; border: none; color: var(--focus); font-size: 13px; cursor: pointer;
+    font-family: inherit; padding: 0;
+  }
+  .link-btn:hover { text-decoration: underline; }
+  .toast {
+    position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%) translateY(80px);
+    background: var(--text); color: var(--bg); padding: 10px 22px; border-radius: 10px;
+    font-size: 13px; transition: transform .3s; z-index: 200; pointer-events: none;
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1><span class="tomato">🍅</span> 番茄时钟</h1>
+    <div class="top-actions">
+      <button class="icon-btn" id="themeBtn" title="切换浅色/深色">🌙</button>
+      <button class="icon-btn" id="settingsBtn" title="设置">⚙️</button>
+    </div>
+  </header>
+
+  <!-- 快捷开始卡片（计时器已移至专注页） -->
+  <div class="card start-card">
+    <div class="start-info">
+      <div class="start-title" id="startTitle">准备开始专注</div>
+      <div class="start-sub" id="startSub">点击任务右侧"专注"选定任务，或直接开始</div>
+    </div>
+    <button class="btn-start" id="openFocusBtn">▶ 开始专注</button>
+  </div>
+
+  <!-- 任务列表 -->
+  <div class="card">
+    <div class="section-title">📝 任务打卡 <span class="hint">点击"专注"将任务设为当前专注目标</span></div>
+    <div class="task-input-row">
+      <input type="text" id="taskInput" placeholder="添加新任务，回车或点击添加…" maxlength="80">
+      <button class="btn-add" id="addTaskBtn">添加</button>
+    </div>
+    <ul class="task-list" id="taskList"></ul>
+  </div>
+
+  <!-- 统计 -->
+  <div class="card">
+    <div class="section-title">📊 今日统计</div>
+    <div class="stats-row">
+      <div class="stat-item"><div class="num" id="statPomos">0</div><div class="lbl">今日番茄数</div></div>
+      <div class="stat-item"><div class="num" id="statMinutes">0</div><div class="lbl">专注分钟数</div></div>
+      <div class="stat-item"><div class="num" id="statTasks">0/0</div><div class="lbl">任务完成数</div></div>
+    </div>
+    <div class="section-title">近 7 天番茄数</div>
+    <div class="chart" id="chart"></div>
+  </div>
+
+  <!-- 日历待办 -->
+  <div class="card">
+    <div class="section-title">📅 日历待办 <span class="hint">点击日期查看/添加当日待办</span></div>
+    <div class="cal-header">
+      <div class="cal-month" id="calMonthLabel">--</div>
+      <div class="cal-nav">
+        <button class="icon-btn" id="calPrev" title="上月">‹</button>
+        <button class="icon-btn" id="calToday" title="今天">今</button>
+        <button class="icon-btn" id="calNext" title="下月">›</button>
+      </div>
+    </div>
+    <div class="cal-grid" id="calGrid"></div>
+    <div class="cal-todo-title" id="calTodoTitle">--</div>
+    <div class="task-input-row">
+      <input type="text" id="calTodoInput" placeholder="为所选日期添加待办…回车添加" maxlength="80">
+      <button class="btn-add" id="addCalTodo" type="button">添加</button>
+    </div>
+    <ul class="task-list" id="calTodoList"></ul>
+  </div>
+</div>
+
+<!-- 专注计时页（全屏覆盖层） -->
+<div class="focus-page" id="focusPage">
+  <div class="focus-bg" id="focusBg"></div>
+  <div class="focus-topbar">
+    <button class="icon-btn" id="focusBackBtn" title="返回主页">←</button>
+    <div class="modes">
+      <button class="mode-btn active" data-mode="focus">专注</button>
+      <button class="mode-btn" data-mode="short">短休息</button>
+      <button class="mode-btn" data-mode="long">长休息</button>
+    </div>
+    <button class="icon-btn" id="bgShuffleBtn" title="换一张背景图">🖼</button>
+  </div>
+  <div class="focus-card">
+    <div class="ring-box">
+      <svg width="240" height="240" viewBox="0 0 240 240">
+        <circle class="ring-bg" cx="120" cy="120" r="110"></circle>
+        <circle class="ring-fg" id="ringFg" cx="120" cy="120" r="110"></circle>
+      </svg>
+      <div class="ring-center">
+        <div class="phase-label" id="phaseLabel">专注</div>
+        <div class="time-display" id="timeDisplay">25:00</div>
+        <div class="focus-task-name" id="focusTaskName">未选择专注任务</div>
+      </div>
+    </div>
+    <div class="controls">
+      <button class="btn btn-sub" id="resetBtn" title="重置当前阶段">↺ 重置</button>
+      <button class="btn btn-main" id="startBtn">开始</button>
+      <button class="btn btn-sub" id="skipBtn" title="跳过当前阶段">⏭ 跳过</button>
+    </div>
+    <!-- 综合背景音控制区：rainylofi -->
+    <div class="ambient-bar">
+      <div class="ambient-row">
+        <span class="ambient-label">🌧 rainylofi</span>
+        <button class="icon-btn" id="focusRainBtn" title="rainylofi 开/关">🌧</button>
+        <button class="icon-btn" id="focusRainPauseBtn" title="暂停雨声">⏸</button>
+        <button class="icon-btn" id="focusRainNextBtn" title="随机切一首">⏭</button>
+        <button class="icon-btn" id="focusRainListBtn" title="选择曲目">🎵</button>
+        <div class="vol">💧 <input type="range" id="focusRainVol" min="0" max="100" value="50" style="width:90px"></div>
+      </div>
+      <div class="track-pop" id="rainTrackPop"></div>
+    </div>
+    <div class="focus-foot">专注/休息时长在 ⚙️ 设置 中调整</div>
+  </div>
+  <div class="quote-bar" id="quoteBar">
+    <div class="quote-inner">
+      <span id="quoteText"></span><span class="q-author" id="quoteAuthor"></span><button class="quote-shuffle" id="quoteShuffleBtn" title="换一句">🔄</button>
+    </div>
+  </div>
+</div>
+
+<!-- 设置弹窗 -->
+<div class="modal-mask" id="settingsMask">
+  <div class="modal">
+    <h2>⚙️ 设置</h2>
+    <div class="form-row"><span>专注时长（分钟）</span><input type="number" id="setFocus" min="1" max="120"></div>
+    <div class="form-row"><span>短休息时长（分钟）</span><input type="number" id="setShort" min="1" max="60"></div>
+    <div class="form-row"><span>长休息时长（分钟）</span><input type="number" id="setLong" min="1" max="90"></div>
+    <div class="form-row"><span>长休息间隔（每 N 个番茄）</span><input type="number" id="setInterval" min="2" max="10"></div>
+    <div class="form-row"><span>休息结束后自动开始专注</span>
+      <label class="switch"><input type="checkbox" id="setAutoFocus"><span class="slider"></span></label></div>
+    <div class="form-row"><span>专注结束后自动开始休息</span>
+      <label class="switch"><input type="checkbox" id="setAutoBreak"><span class="slider"></span></label></div>
+    <div class="form-row"><span>浏览器系统通知</span>
+      <label class="switch"><input type="checkbox" id="setNotify"><span class="slider"></span></label></div>
+    <div class="divider"></div>
+    <div class="form-row"><span style="font-size:13px;color:var(--text-2)">专注背景图</span></div>
+    <div class="form-row">
+      <span>自定义背景（上传即替换上一张）</span>
+      <button class="link-btn" id="uploadBgBtn">上传图片</button>
+      <input type="file" id="bgFileInput" accept="image/png,image/jpeg,image/webp" hidden>
+    </div>
+    <div class="form-row" id="customBgRow" style="display:none">
+      <span>当前自定义背景</span>
+      <img id="customBgPreview" alt="自定义背景预览" style="width:86px;height:48px;object-fit:cover;border-radius:6px;flex:none">
+      <button class="link-btn" id="clearBgBtn">清除</button>
+    </div>
+    <div class="divider"></div>
+    <div class="form-row">
+      <span style="font-size:13px;color:var(--text-2)">进度环颜色</span>
+      <button class="link-btn" id="resetRingColors">恢复默认</button>
+    </div>
+    <div class="form-row"><span>专注环颜色</span><input type="color" id="setRingFocus"></div>
+    <div class="form-row"><span>短休环颜色</span><input type="color" id="setRingShort"></div>
+    <div class="form-row"><span>长休环颜色</span><input type="color" id="setRingLong"></div>
+    <div class="modal-actions">
+      <button class="btn btn-sub" id="cancelSettings">取消</button>
+      <button class="btn btn-main" id="saveSettings">保存</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+/* ================= 工具 ================= */
+const $ = id => document.getElementById(id);
+const pad2 = n => String(n).padStart(2, "0");
+const dateKeyOf = (y, m, d) => y + "-" + pad2(m + 1) + "-" + pad2(d);
+const todayKey = () => {
+  const d = new Date();
+  return dateKeyOf(d.getFullYear(), d.getMonth(), d.getDate());
+};
+const load = (k, def) => {
+  try { const v = JSON.parse(localStorage.getItem(k)); return v === null ? def : v; }
+  catch(e) { return def; }
+};
+const save = (k, v) => localStorage.setItem(k, JSON.stringify(v));
+function showToast(msg) {
+  const t = $("toast"); t.textContent = msg; t.classList.add("show");
+  clearTimeout(t._tm); t._tm = setTimeout(() => t.classList.remove("show"), 2400);
+}
+
+/* ================= 默认值 ================= */
+const DEFAULT_RING_COLORS = {
+  light: { focus: "#e05252", short: "#35a06b", long: "#4a7de0" },
+  dark:  { focus: "#e06060", short: "#46b37b", long: "#5b8ceb" }
+};
+
+/* ================= 状态存储 ================= */
+let settings = Object.assign(
+  { focus: 25, short: 5, long: 15, longInterval: 4,
+    autoFocus: true, autoBreak: false, notify: true,
+    ringColors: null },
+  load("pomo.settings", {})
+);
+let tasks = load("pomo.tasks", []);
+let stats = load("pomo.stats", {});
+let currentTaskId = load("pomo.currentTaskId", null);
+let focusCount = load("pomo.focusCount", 0);
+let calendarTodos = load("pomo.calendarTodos", {});   // { "YYYY-MM-DD": [{id,name,done}] }
+
+const PHASES = {
+  focus: { label: "专注" },
+  short: { label: "短休息" },
+  long:  { label: "长休息" }
+};
+function ringColorVar(p) {
+  return getComputedStyle(document.documentElement).getPropertyValue("--ring-" + p).trim();
+}
+
+/* ================= 进度环颜色 ================= */
+function applyRingColors() {
+  const theme = document.documentElement.dataset.theme || "light";
+  const colors = (settings.ringColors && settings.ringColors[theme]) || DEFAULT_RING_COLORS[theme];
+  ["focus", "short", "long"].forEach(p => {
+    document.documentElement.style.setProperty("--ring-" + p, colors[p]);
+  });
+}
+function resetRingColors() {
+  settings.ringColors = null;
+  save("pomo.settings", settings);
+  ["focus", "short", "long"].forEach(p => {
+    document.documentElement.style.removeProperty("--ring-" + p);
+  });
+  const theme = document.documentElement.dataset.theme || "light";
+  $("setRingFocus").value = DEFAULT_RING_COLORS[theme].focus;
+  $("setRingShort").value = DEFAULT_RING_COLORS[theme].short;
+  $("setRingLong").value  = DEFAULT_RING_COLORS[theme].long;
+  renderTimer();
+  showToast("进度环颜色已恢复默认");
+}
+
+/* ================= 计时器 ================= */
+let phase = "focus";
+let running = false;
+let endAt = 0;
+let remainingMs = settings.focus * 60000;
+let tickTimer = null;
+
+const RING_LEN = 2 * Math.PI * 110;
+const ringFg = $("ringFg");
+ringFg.style.strokeDasharray = RING_LEN;
+
+function phaseDurationMs(p) {
+  return (p === "focus" ? settings.focus : p === "short" ? settings.short : settings.long) * 60000;
+}
+function phaseTotal() { return phaseDurationMs(phase); }
+
+function renderTimer() {
+  const ms = running ? Math.max(0, endAt - Date.now()) : remainingMs;
+  const total = phaseTotal();
+  const mm = Math.floor(ms / 60000), ss = Math.floor((ms % 60000) / 1000);
+  $("timeDisplay").textContent = pad2(mm) + ":" + pad2(ss);
+  const ratio = total > 0 ? ms / total : 0;
+  ringFg.style.strokeDashoffset = RING_LEN * (1 - ratio);
+  ringFg.style.stroke = ringColorVar(phase);
+  $("phaseLabel").textContent = PHASES[phase].label;
+  document.title = (running ? "▶ " : "") + $("timeDisplay").textContent + " · " + PHASES[phase].label + " - 番茄时钟";
+  renderStartCard();
+}
+
+function setPhase(p, keepRunning) {
+  phase = p;
+  document.querySelectorAll(".mode-btn").forEach(b => b.classList.toggle("active", b.dataset.mode === p));
+  remainingMs = phaseDurationMs(p);
+  if (keepRunning) { endAt = Date.now() + remainingMs; }
+  renderTimer();
+}
+
+function start() {
+  if (running) return;
+  ensureAudioCtx();
+  running = true;
+  endAt = Date.now() + remainingMs;
+  $("startBtn").textContent = "暂停";
+  tickTimer = setInterval(tick, 250);
+  renderTimer();
+  requestNotifyPermission();
+}
+function pause() {
+  if (!running) return;
+  remainingMs = Math.max(0, endAt - Date.now());
+  running = false;
+  clearInterval(tickTimer);
+  $("startBtn").textContent = "开始";
+  renderTimer();
+}
+function reset() {
+  pause();
+  remainingMs = phaseDurationMs(phase);
+  renderTimer();
+}
+function tick() {
+  if (Date.now() >= endAt) { completePhase(); return; }
+  renderTimer();
+}
+
+function completePhase() {
+  clearInterval(tickTimer);
+  running = false;
+  $("startBtn").textContent = "开始";
+  if (phase === "focus") {
+    const k = todayKey();
+    if (!stats[k]) stats[k] = { pomos: 0, minutes: 0 };
+    stats[k].pomos += 1;
+    stats[k].minutes += settings.focus;
+    save("pomo.stats", stats);
+    focusCount += 1;
+    save("pomo.focusCount", focusCount);
+    const t = tasks.find(x => x.id === currentTaskId);
+    if (t) { t.pomos += 1; save("pomo.tasks", tasks); }
+    renderStats(); renderTasks(); renderCalendar();
+    const next = (focusCount % settings.longInterval === 0) ? "long" : "short";
+    playAlarm();
+    notify("🍅 专注完成！", "完成了 1 个番茄钟，休息一下吧" + (next === "long" ? "（这次是长休息）" : ""));
+    setPhase(next, false);
+    if (settings.autoBreak) start();
+  } else {
+    playAlarm();
+    notify("⏰ 休息结束", "精神焕发，开始下一个番茄吧！");
+    setPhase("focus", false);
+    if (settings.autoFocus) start();
+  }
+}
+
+function skip() {
+  if (phase === "focus") {
+    const next = ((focusCount + 1) % settings.longInterval === 0) ? "long" : "short";
+    // 跳过时已完成的专注时间按整分钟计入首页统计（不足 1 分钟不计，番茄数不加）
+    const elapsedMin = Math.floor((phaseTotal() - remainingMs) / 60000);
+    if (elapsedMin > 0) {
+      const k = todayKey();
+      if (!stats[k]) stats[k] = { pomos: 0, minutes: 0 };
+      stats[k].minutes += elapsedMin;
+      save("pomo.stats", stats);
+      renderStats(); renderCalendar();
+    }
+    showToast(elapsedMin > 0
+      ? "已跳过本阶段（已专注 " + elapsedMin + " 分钟计入统计）"
+      : "已跳过本阶段（不足 1 分钟，未计入统计）");
+    pause();
+    setPhase(next, false);
+  } else {
+    pause();
+    setPhase("focus", false);
+  }
+}
+
+/* ================= 提醒 ================= */
+let audioCtx = null;
+function ensureAudioCtx() {
+  if (!audioCtx) {
+    try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
+  }
+  if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+}
+function playAlarm() {
+  ensureAudioCtx();
+  if (!audioCtx) return;
+  [0, 0.22, 0.44].forEach((delay, i) => {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = "sine";
+    osc.frequency.value = 660 + i * 110;
+    gain.gain.setValueAtTime(0.0001, audioCtx.currentTime + delay);
+    gain.gain.exponentialRampToValueAtTime(0.35, audioCtx.currentTime + delay + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + delay + 0.18);
+    osc.connect(gain); gain.connect(audioCtx.destination);
+    osc.start(audioCtx.currentTime + delay);
+    osc.stop(audioCtx.currentTime + delay + 0.2);
+  });
+}
+function requestNotifyPermission() {
+  if (settings.notify && "Notification" in window && Notification.permission === "default") {
+    Notification.requestPermission();
+  }
+}
+function notify(title, body) {
+  if (settings.notify && "Notification" in window && Notification.permission === "granted") {
+    try { new Notification(title, { body, icon: "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y="80" font-size="80">🍅</text></svg>') }); } catch(e) {}
+  }
+  showToast(title + " " + body);
+}
+
+/* ================= 任务列表 ================= */
+function addTask() {
+  const name = $("taskInput").value.trim();
+  if (!name) return;
+  tasks.push({ id: Date.now() + "-" + Math.floor(Math.random()*1000), name, done: false, pomos: 0 });
+  save("pomo.tasks", tasks);
+  $("taskInput").value = "";
+  renderTasks(); renderStats();
+}
+function renderTasks() {
+  const ul = $("taskList");
+  ul.innerHTML = "";
+  if (tasks.length === 0) {
+    ul.innerHTML = '<div class="empty-tip">暂无任务，添加一个开始专注吧</div>';
+    return;
+  }
+  tasks.forEach(t => {
+    const li = document.createElement("li");
+    li.className = (t.done ? "done " : "") + (t.id === currentTaskId ? "current" : "");
+    const chk = document.createElement("button");
+    chk.className = "task-check" + (t.done ? " checked" : "");
+    chk.textContent = t.done ? "✓" : "";
+    chk.title = "标记完成/未完成";
+    chk.onclick = () => { t.done = !t.done; save("pomo.tasks", tasks); renderTasks(); renderStats(); };
+    const name = document.createElement("span");
+    name.className = "task-name"; name.textContent = t.name; name.title = t.name;
+    const pomo = document.createElement("span");
+    pomo.className = "task-pomo"; pomo.textContent = "🍅" + t.pomos;
+    pomo.title = "已完成番茄数";
+    const sel = document.createElement("button");
+    sel.className = "task-btn select";
+    sel.textContent = t.id === currentTaskId ? "★ 专注中" : "专注";
+    sel.onclick = () => {
+      currentTaskId = t.id;
+      save("pomo.currentTaskId", currentTaskId);
+      renderTasks(); renderTimer();
+      openFocusPage();
+    };
+    const del = document.createElement("button");
+    del.className = "task-btn del"; del.textContent = "✕"; del.title = "删除任务";
+    del.onclick = () => {
+      tasks = tasks.filter(x => x.id !== t.id);
+      if (currentTaskId === t.id) { currentTaskId = null; save("pomo.currentTaskId", null); }
+      save("pomo.tasks", tasks);
+      renderTasks(); renderStats(); renderTimer();
+    };
+    li.append(chk, name, pomo, sel, del);
+    ul.appendChild(li);
+  });
+  renderFocusTaskName();
+  renderStartCard();
+}
+function renderFocusTaskName() {
+  const t = tasks.find(x => x.id === currentTaskId);
+  $("focusTaskName").textContent = t ? "🎯 " + t.name : "未选择专注任务";
+}
+
+/* ================= 统计 ================= */
+function renderStats() {
+  const k = todayKey();
+  const s = stats[k] || { pomos: 0, minutes: 0 };
+  $("statPomos").textContent = s.pomos;
+  $("statMinutes").textContent = s.minutes;
+  const done = tasks.filter(t => t.done).length;
+  $("statTasks").textContent = done + "/" + tasks.length;
+  renderChart();
+}
+function renderChart() {
+  const chart = $("chart");
+  chart.innerHTML = "";
+  const days = [];
+  let totalPomos = 0;
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(); d.setDate(d.getDate() - i);
+    const key = dateKeyOf(d.getFullYear(), d.getMonth(), d.getDate());
+    const num = (stats[key] || {pomos:0}).pomos;
+    totalPomos += num;
+    days.push({ key, label: (d.getMonth()+1) + "/" + d.getDate(), num });
+  }
+  // 加固：本周累计提示（避免 0 柱子时迷茫）
+  let totalEl = $("chartTotal");
+  if (!totalEl) {
+    totalEl = document.createElement("div");
+    totalEl.id = "chartTotal";
+    totalEl.style.cssText = "font-size:12px;color:var(--text-2);text-align:right;margin-top:-2px;margin-bottom:6px";
+    chart.parentNode.insertBefore(totalEl, chart);
+  }
+  totalEl.textContent = "近 7 天共完成 " + totalPomos + " 个番茄";
+
+  const max = Math.max(1, ...days.map(d => d.num));
+  days.forEach((d, i) => {
+    const col = document.createElement("div");
+    col.className = "chart-col";
+    const bar = document.createElement("div");
+    bar.className = "chart-bar";
+    bar.style.height = (d.num / max * 78) + "px";
+    bar.title = d.label + "  " + d.num + " 个番茄";
+    if (d.num > 0) {
+      const n = document.createElement("span");
+      n.className = "bar-num"; n.textContent = d.num;
+      bar.appendChild(n);
+    }
+    const day = document.createElement("div");
+    day.className = "chart-day" + (i === 6 ? " today" : "");
+    day.textContent = d.label;
+    col.append(bar, day);
+    chart.appendChild(col);
+  });
+}
+
+/* ================= 日历待办 ================= */
+let calViewY, calViewM, selectedDate;
+
+function initCalendar() {
+  const now = new Date();
+  calViewY = now.getFullYear(); calViewM = now.getMonth();
+  selectedDate = dateKeyOf(now.getFullYear(), now.getMonth(), now.getDate());
+}
+function renderCalendar() {
+  $("calMonthLabel").textContent = calViewY + " 年 " + (calViewM + 1) + " 月";
+  const grid = $("calGrid");
+  grid.innerHTML = "";
+  ["日","一","二","三","四","五","六"].forEach(d => {
+    const c = document.createElement("div");
+    c.className = "cal-dow"; c.textContent = d;
+    grid.appendChild(c);
+  });
+  const first = new Date(calViewY, calViewM, 1);
+  const offset = first.getDay();
+  const daysInMonth = new Date(calViewY, calViewM + 1, 0).getDate();
+  const prevMonthDays = new Date(calViewY, calViewM, 0).getDate();
+  const now = new Date();
+  const todayK = dateKeyOf(now.getFullYear(), now.getMonth(), now.getDate());
+
+  // 上月尾
+  for (let i = offset - 1; i >= 0; i--) {
+    const d = prevMonthDays - i;
+    const py = calViewM === 0 ? calViewY - 1 : calViewY;
+    const pm = (calViewM + 11) % 12;
+    grid.appendChild(makeCalCell(py, pm, d, true, false, false, dateKeyOf(py, pm, d)));
+  }
+  // 本月
+  for (let d = 1; d <= daysInMonth; d++) {
+    const k = dateKeyOf(calViewY, calViewM, d);
+    grid.appendChild(makeCalCell(calViewY, calViewM, d, false, k === todayK, k === selectedDate, k));
+  }
+  // 下月头
+  const totalShown = offset + daysInMonth;
+  const rem = (7 - totalShown % 7) % 7;
+  for (let d = 1; d <= rem; d++) {
+    const ny = calViewM === 11 ? calViewY + 1 : calViewY;
+    const nm = (calViewM + 1) % 12;
+    grid.appendChild(makeCalCell(ny, nm, d, true, false, false, dateKeyOf(ny, nm, d)));
+  }
+  renderCalTodos();
+}
+function makeCalCell(y, m, d, isOther, isToday, isSelected, key) {
+  const cell = document.createElement("div");
+  cell.className = "cal-cell"
+    + (isOther ? " other" : "")
+    + (isToday ? " today" : "")
+    + (isSelected ? " selected" : "");
+  cell.textContent = d;
+  const p = (stats[key] || {pomos:0}).pomos;
+  if (p > 0) {
+    const dot = document.createElement("span");
+    dot.className = "pomo-dot";
+    dot.title = "已完成 " + p + " 个番茄";
+    cell.appendChild(dot);
+  }
+  const todoCount = (calendarTodos[key] || []).filter(t => !t.done).length;
+  if (todoCount > 0) {
+    const badge = document.createElement("span");
+    badge.style.cssText = "position:absolute;top:3px;right:4px;font-size:9px;background:" +
+      (isSelected ? "rgba(255,255,255,.85)" : "var(--focus)") +
+      ";color:" + (isSelected ? "var(--focus)" : "#fff") +
+      ";min-width:14px;height:14px;border-radius:7px;padding:0 3px;display:flex;align-items:center;justify-content:center;line-height:1";
+    badge.textContent = todoCount;
+    cell.appendChild(badge);
+  }
+  cell.onclick = () => {
+    selectedDate = key;
+    if (y !== calViewY || m !== calViewM) { calViewY = y; calViewM = m; }
+    renderCalendar();
+  };
+  return cell;
+}
+function renderCalTodos() {
+  const d = new Date(selectedDate);
+  $("calTodoTitle").textContent = selectedDate + " （" + ["周日","周一","周二","周三","周四","周五","周六"][d.getDay()] + "） 的待办";
+  const ul = $("calTodoList");
+  ul.innerHTML = "";
+  const list = calendarTodos[selectedDate] || [];
+  if (list.length === 0) {
+    ul.innerHTML = '<div class="empty-tip">该日暂无待办</div>';
+    return;
+  }
+  list.forEach(t => {
+    const li = document.createElement("li");
+    if (t.done) li.className = "done";
+    const chk = document.createElement("button");
+    chk.className = "task-check" + (t.done ? " checked" : "");
+    chk.textContent = t.done ? "✓" : "";
+    chk.onclick = () => { t.done = !t.done; save("pomo.calendarTodos", calendarTodos); renderCalTodos(); renderCalendar(); };
+    const name = document.createElement("span");
+    name.className = "task-name"; name.textContent = t.name; name.title = t.name;
+    const del = document.createElement("button");
+    del.className = "task-btn del"; del.textContent = "✕"; del.title = "删除";
+    del.onclick = () => {
+      calendarTodos[selectedDate] = list.filter(x => x.id !== t.id);
+      if (calendarTodos[selectedDate].length === 0) delete calendarTodos[selectedDate];
+      save("pomo.calendarTodos", calendarTodos);
+      renderCalTodos(); renderCalendar();
+    };
+    li.append(chk, name, del);
+    ul.appendChild(li);
+  });
+}
+function addCalTodo() {
+  try {
+    const inp = $("calTodoInput");
+    if (!inp) return;
+    const name = inp.value.trim();
+    if (!name) { inp.focus(); return; }
+    if (!selectedDate) { showToast("请先在日历中选择一个日期"); return; }
+    if (!calendarTodos[selectedDate]) calendarTodos[selectedDate] = [];
+    calendarTodos[selectedDate].push({
+      id: Date.now() + "-" + Math.floor(Math.random() * 1000),
+      name, done: false
+    });
+    save("pomo.calendarTodos", calendarTodos);
+    inp.value = "";
+    renderCalTodos();
+    renderCalendar();
+    showToast("已添加待办：" + name);
+  } catch (e) { console.error("addCalTodo:", e); }
+}
+
+/* ================= 本地数据库（IndexedDB，存自定义背景） ================= */
+let db = null;
+
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open("pomodoro-music", 1);
+    req.onupgradeneeded = e => {
+      const d = e.target.result;
+      if (!d.objectStoreNames.contains("tracks")) d.createObjectStore("tracks", { keyPath: "id" });
+    };
+    req.onsuccess = e => resolve(e.target.result);
+    req.onerror = e => reject(e.target.error);
+  });
+}
+async function dbPut(track) {
+  return new Promise((res, rej) => {
+    const tx = db.transaction("tracks", "readwrite");
+    tx.objectStore("tracks").put(track);
+    tx.oncomplete = res; tx.onerror = () => rej(tx.error);
+  });
+}
+async function dbDelete(id) {
+  return new Promise((res, rej) => {
+    const tx = db.transaction("tracks", "readwrite");
+    tx.objectStore("tracks").delete(id);
+    tx.oncomplete = res; tx.onerror = () => rej(tx.error);
+  });
+}
+async function dbGet(id) {
+  return new Promise((res, rej) => {
+    const tx = db.transaction("tracks", "readonly");
+    const rq = tx.objectStore("tracks").get(id);
+    rq.onsuccess = () => res(rq.result || null);
+    rq.onerror = () => rej(rq.error);
+  });
+}
+
+async function initDb() {
+  try {
+    db = await openDB();
+    // 本地音乐模块已移除：清理历史遗留的音乐记录，仅保留自定义背景（__customBg__）
+    await new Promise((res, rej) => {
+      const tx = db.transaction("tracks", "readwrite");
+      const store = tx.objectStore("tracks");
+      const rq = store.getAllKeys();
+      rq.onsuccess = () => {
+        rq.result.forEach(k => { if (k !== CUSTOM_BG_ID) store.delete(k); });
+        res();
+      };
+      rq.onerror = () => rej(rq.error);
+    });
+  } catch (e) {
+    console.warn("数据库打开失败", e);
+    showToast("背景存储初始化失败（无痕模式？浏览器拒绝 IndexedDB）");
+  }
+}
+
+/* ================= 专注页：背景图与雨声 ================= */
+// 兼容两种部署结构：本地「带 assets/ 子目录」与 GitHub Pages「根目录平铺」
+// 启动时探测一次，自动选择可用路径；探测失败回退到首选路径（本地 file:// 会降级）
+const focusPage = $("focusPage");
+const BG_FILES_PRIMARY  = ["assets/bg-1.png", "assets/bg-2.png", "assets/bg-3.png", "assets/bg-4.png",
+                          "assets/bg-5.jpg", "assets/bg-6.jpg", "assets/bg-7.jpg", "assets/bg-8.jpg", "assets/bg-9.jpg",
+                          "assets/bg-10.jpg", "assets/bg-11.jpg", "assets/bg-12.jpg", "assets/bg-13.jpg", "assets/bg-14.jpg"];
+const BG_FILES_FALLBACK = ["bg-1.png", "bg-2.png", "bg-3.png", "bg-4.png",
+                          "bg-5.jpg", "bg-6.jpg", "bg-7.jpg", "bg-8.jpg", "bg-9.jpg",
+                          "bg-10.jpg", "bg-11.jpg", "bg-12.jpg", "bg-13.jpg", "bg-14.jpg"];
+let BG_FILES  = BG_FILES_PRIMARY;
+// 用 Image 探测而不是 fetch HEAD：本地 file:// 协议下 fetch 会被浏览器安全策略直接拒绝，
+// 导致误判"assets/ 路径不可用"而切换到不存在的根目录路径；Image 加载在 file:///http(s)/均可用
+function _probeExists(url) {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => resolve(true);
+    img.onerror = () => resolve(false);
+    img.src = url;
+  });
+}
+(async () => {
+  try {
+    if (!await _probeExists(BG_FILES_PRIMARY[0])) {
+      BG_FILES = BG_FILES_FALLBACK;
+      console.info("[pomodoro] 背景图切换到根目录路径:", BG_FILES);
+    }
+    // 逐张探测，剔除尚不存在的背景图（缺失时随机命中会导致闪回渐变底色）
+    const exists = await Promise.all(BG_FILES.map(_probeExists));
+    const avail = BG_FILES.filter((_, i) => exists[i]);
+    if (avail.length > 0 && avail.length < BG_FILES.length) {
+      console.info("[pomodoro] 背景图有 " + (BG_FILES.length - avail.length) + " 张缺失，已自动跳过");
+      BG_FILES = avail;
+    }
+  } catch (e) {}
+})();
+let bgIndex = load("pomo.focusBgIndex", -1);
+let rainOn = load("pomo.rainOn", true);
+let rainVol = load("pomo.rainVol", 0.5);
+
+function setFocusBg(url) { $("focusBg").style.backgroundImage = 'url("' + url + '")'; }
+function setGradientBg() { $("focusBg").style.backgroundImage = "linear-gradient(135deg, #2b3a55 0%, #1d2b3f 55%, #3d2b40 100%)"; }
+function tryBg(idx, allowPickOnFail) {
+  if (idx < 0 || idx >= BG_FILES.length) { setGradientBg(); return; }
+  const img = new Image();
+  // 注意用 img.src（实际验证过的 URL），而不是 BG_FILES[idx]：
+  // 探测异步进行中数组可能被切换，直接取数组会出现"加载成功却设置了错误路径"的竞态
+  img.onload = () => { setFocusBg(img.src); save("pomo.focusBgIndex", idx); };
+  img.onerror = () => { if (allowPickOnFail) pickRandomBg(); else setGradientBg(); };
+  img.src = BG_FILES[idx];
+}
+function pickRandomBg() {
+  if (BG_FILES.length === 0) { setGradientBg(); return; }
+  let next = Math.floor(Math.random() * BG_FILES.length);
+  if (next === bgIndex && BG_FILES.length > 1) next = (next + 1) % BG_FILES.length;
+  bgIndex = next;
+  tryBg(next, false);
+}
+
+/* ---- 自定义专注背景（单张替换制，存 IndexedDB）---- */
+const CUSTOM_BG_ID = "__customBg__";   // tracks 库目前仅存自定义背景
+let customBgUrl = null;
+async function loadCustomBg() {
+  if (!db) return;
+  try {
+    const rec = await dbGet(CUSTOM_BG_ID);
+    if (rec && rec.blob) {
+      customBgUrl = URL.createObjectURL(rec.blob);
+      $("customBgPreview").src = customBgUrl;
+      $("customBgRow").style.display = "";
+    }
+  } catch (e) { console.warn("[pomodoro] 自定义背景加载失败", e); }
+}
+function handleBgUpload() {
+  const f = $("bgFileInput").files[0];
+  $("bgFileInput").value = "";            // 允许再次选择同一文件
+  if (!f) return;
+  if (!/^image\/(png|jpe?g|webp)$/.test(f.type)) { showToast("请选择 png / jpg / webp 图片"); return; }
+  if (f.size > 10 * 1024 * 1024) { showToast("图片过大（超过 10MB），请压缩后再上传"); return; }
+  (async () => {
+    try {
+      await dbPut({ id: CUSTOM_BG_ID, name: f.name, blob: f });   // File 即 Blob；put 自动替换上一张
+      if (customBgUrl) URL.revokeObjectURL(customBgUrl);
+      customBgUrl = URL.createObjectURL(f);
+      $("customBgPreview").src = customBgUrl;
+      $("customBgRow").style.display = "";
+      setFocusBg(customBgUrl);            // 立即生效（若专注页已打开）
+      showToast("自定义背景已更新（已替换上一张）");
+    } catch (e) { console.error(e); showToast("保存失败：浏览器存储异常"); }
+  })();
+}
+async function clearCustomBg() {
+  try { await dbDelete(CUSTOM_BG_ID); } catch (e) {}
+  if (customBgUrl) URL.revokeObjectURL(customBgUrl);
+  customBgUrl = null;
+  $("customBgRow").style.display = "none";
+  pickRandomBg();
+  showToast("已恢复内置背景");
+}
+
+/* --- 雨声：Web Audio 随机循环播放 + 交叉淡化 + 柔化处理链 ---
+ * 信号链：source → Lowpass(9kHz) → Compressor → MasterGain → destination
+ * 多段 mp3 随机选取，每段完整播放后交叉淡化进下一段
+ * 降级：mp3 加载失败 → 媒体元素直放（file://）→ 程序合成 → 静音 */
+let rainCtx = null;
+let rainMode = "auto";           // auto（mp3 轮播）/ synth（程序合成）/ none（不可用）
+let rainBuffers = [];           // 已解码的 AudioBuffer 列表
+let rainChain = null;            // { filter, comp, master } 共用处理链
+let rainActive = null;           // 当前播放 { src, gain, idx, endsAt }
+let rainReady = false;
+let rainInitPromise = null;
+let rainUrls = [];               // 媒体元素模式：可用的音频 URL
+let rainElMode = false;          // 媒体元素模式标记（file:// 本地打开时启用）
+let rainElPool = [];             // 交叉淡化用的 <audio> 池
+let rainElTimer = null;
+let rainElPlaying = false;
+let rainLastIdx = -1;
+let rainPaused = false;           // 暂停标记（暂停保留位置，继续接着播）
+let rainPausedAt = null;          // Web Audio 模式暂停时的 { idx, offset } 恢复点
+let rainTimer = null;             // Web Audio 模式的下一段排程句柄
+let rainCurEl = null;             // 媒体元素模式当前播放的 <audio>
+const RAIN_FILES = ["rain-1", "rain-1-alt", "rain-2", "rain-3", "rain-4", "rain-5", "Rainy Window Study (slowed)", "雨夜书桌"];
+const CROSSFADE_S = 2.5;         // 交叉淡化时长（秒）
+// 曲目友好名称（未命中的显示原始文件名）
+const RAIN_NAMES = {
+  "rain-1": "Rain on Felt · 毡上雨声",
+  "rain-1-alt": "Rain on Felt · 变奏版",
+  "rain-2": "细雨低语",
+  "rain-3": "雨夜微光",
+  "rain-4": "檐下听雨",
+  "rain-5": "午后咖啡店",
+  "Rainy Window Study (slowed)": "雨窗书桌 · 慢速版",
+  "雨夜书桌": "雨夜书桌"
+};
+let rainBufferNames = [];         // Web Audio 模式：与 rainBuffers 平行的文件名（个别文件加载失败时索引不连续）
+
+function _rainFilePath(base) {
+  // 适配 GitHub Pages 根目录平铺 vs 本地 assets/ 子目录
+  // encodeURIComponent 兼容含空格/中文的文件名（如 "雨夜书桌"、"Rainy Window Study (slowed)"）
+  const f = encodeURIComponent(base) + ".mp3";
+  return { primary: "assets/audio/" + f, fallback: f };
+}
+async function _fetchFirstAvailable(paths) {
+  for (const url of paths) {
+    try {
+      const r = await fetch(url, { cache: "no-cache" });
+      if (r.ok) return await r.arrayBuffer();
+    } catch (e) {}
+  }
+  return null;
+}
+function _buildRainChain(ctx) {
+  const filter = ctx.createBiquadFilter();
+  filter.type = "lowpass";
+  filter.frequency.value = 9000;   // 轻低通：只削掉 mp3 高频毛刺，保留钢琴与合成器质感
+  filter.Q.value = 0.5;
+  const comp = ctx.createDynamicsCompressor();
+  comp.threshold.value = -20;       // 压缩阈值（dB）
+  comp.knee.value = 12;
+  comp.ratio.value = 3;             // 压缩比
+  comp.attack.value = 0.05;         // 起音 50ms
+  comp.release.value = 0.3;         // 释放 300ms
+  const master = ctx.createGain();
+  master.gain.value = rainVol;
+  filter.connect(comp);
+  comp.connect(master);
+  master.connect(ctx.destination);
+  return { filter, comp, master };
+}
+async function _loadRainBuffers(ctx) {
+  const found = [];
+  for (const base of RAIN_FILES) {
+    const paths = _rainFilePath(base);
+    const ab = await _fetchFirstAvailable([paths.primary, paths.fallback]);
+    if (!ab) continue;
+    try {
+      // decodeAudioData 需要分离 ArrayBuffer
+      const buf = await new Promise((res, rej) => {
+        ctx.decodeAudioData(ab.slice(0), res, rej);
+      });
+      found.push({ name: base, buffer: buf });
+    } catch (e) { console.warn("[pomodoro] 雨声解码失败:", base, e); }
+  }
+  return found;
+}
+function _makeSynthRainBuffer(ctx) {
+  // 程序合成保底：低频雨幕 + 稀疏柔和雨滴
+  const len = Math.floor(ctx.sampleRate * 8);  // 8 秒循环
+  const buf = ctx.createBuffer(2, len, ctx.sampleRate);
+  for (let ch = 0; ch < 2; ch++) {
+    const d = buf.getChannelData(ch);
+    let last = 0;
+    for (let i = 0; i < len; i++) {
+      last = 0.985 * last + 0.015 * (Math.random() * 2 - 1);
+      d[i] = last * 1.8;
+    }
+    // 稀疏雨滴（每段约 30 滴）
+    for (let n = 0; n < 30; n++) {
+      const pos = Math.floor(Math.random() * (len - 800));
+      const amp = 0.04 + Math.random() * 0.12;
+      for (let k = 0; k < 500; k++) d[pos + k] += (Math.random() * 2 - 1) * amp * Math.exp(-k / 50);
+    }
+    // 末尾柔和淡出，便于 loop
+    const fadeN = Math.floor(ctx.sampleRate * 1.5);
+    for (let i = 0; i < fadeN; i++) {
+      const f = i / fadeN;
+      d[len - fadeN + i] *= (1 - f);
+      d[i] *= f;
+    }
+  }
+  return buf;
+}
+async function _initRain() {
+  if (rainInitPromise) return rainInitPromise;
+  rainInitPromise = (async () => {
+    // 路线一：fetch + Web Audio 解码（http/https 环境，如 GitHub Pages）
+    try {
+      rainCtx = new (window.AudioContext || window.webkitAudioContext)();
+      rainChain = _buildRainChain(rainCtx);
+      const loaded = await _loadRainBuffers(rainCtx);
+      if (loaded.length > 0) {
+        rainBuffers = loaded.map(x => x.buffer);
+        rainBufferNames = loaded.map(x => x.name);
+        rainReady = true;
+        console.info("[pomodoro] 雨声 lofi 已加载 " + loaded.length + " 段（Web Audio 模式）:", loaded.map(x => x.name).join(", "));
+        return;
+      }
+    } catch (e) { console.warn("[pomodoro] Web Audio 加载失败，切换媒体元素模式:", e); }
+    // 路线二：<audio> 元素直放（本地 file:// 双击打开时 fetch 被浏览器禁止）
+    let prefix = "assets/audio/";
+    if (!await _probeElUrl(prefix + "rain-1.mp3")) {
+      if (await _probeElUrl("rain-1.mp3")) prefix = "";
+      else prefix = null;
+    }
+    if (prefix !== null) {
+      rainUrls = RAIN_FILES.map(b => prefix + encodeURIComponent(b) + ".mp3");
+      rainElMode = true;
+      rainReady = true;
+      console.info("[pomodoro] 雨声 lofi 已加载 " + rainUrls.length + " 段（媒体元素模式）");
+      return;
+    }
+    // 路线三：程序合成保底
+    try {
+      if (!rainCtx) rainCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (!rainChain) rainChain = _buildRainChain(rainCtx);
+      const synth = _makeSynthRainBuffer(rainCtx);
+      rainBuffers = [synth, synth, synth, synth];
+      rainMode = "synth";
+      rainReady = true;
+      console.info("[pomodoro] 雨声降级为程序合成");
+    } catch (e) { rainMode = "none"; }
+  })();
+  return rainInitPromise;
+}
+function _probeElUrl(url) {
+  return new Promise(res => {
+    const a = document.createElement("audio");
+    a.preload = "auto";
+    const to = setTimeout(() => res(false), 4000);
+    a.oncanplay = () => { clearTimeout(to); res(true); };
+    a.onerror = () => { clearTimeout(to); res(false); };
+    a.src = url;
+  });
+}
+function _scheduleNextRain(manual, forceIdx) {
+  if (!rainReady || !rainChain) return;
+  if (rainBuffers.length === 0) return;
+  // 指定曲目（forceIdx 为 rainBuffers 索引）；否则随机选下一段，避免与上一段相同
+  const lastIdx = rainActive ? rainActive.idx : -1;
+  let nextIdx;
+  if (forceIdx !== undefined && forceIdx !== null && rainBuffers[forceIdx]) nextIdx = forceIdx;
+  else if (rainBuffers.length === 1) nextIdx = 0;
+  else {
+    do { nextIdx = Math.floor(Math.random() * rainBuffers.length); }
+    while (nextIdx === lastIdx);
+  }
+  const buf = rainBuffers[nextIdx];
+  const src = rainCtx.createBufferSource();
+  src.buffer = buf;
+  const fadeGain = rainCtx.createGain();
+  src.connect(fadeGain);
+  fadeGain.connect(rainChain.filter);
+  const now = rainCtx.currentTime;
+  // 淡入
+  fadeGain.gain.setValueAtTime(0, now);
+  fadeGain.gain.linearRampToValueAtTime(1, now + CROSSFADE_S);
+  // 上一段淡出（如果存在）；手动切歌时立即开始淡出，自动排程则等到自然结尾前
+  const prev = rainActive;
+  if (prev) {
+    const outAt = manual ? now + 0.05 : Math.max(now + 0.05, prev.endsAt - CROSSFADE_S);
+    try {
+      prev.src.stop(outAt + CROSSFADE_S + 0.05);
+    } catch (e) {}
+    prev.gain.gain.cancelScheduledValues(now);
+    prev.gain.gain.setValueAtTime(prev.gain.gain.value, now);
+    prev.gain.gain.linearRampToValueAtTime(0, outAt + CROSSFADE_S);
+  }
+  // 每段完整播完（在结尾前 CROSSFADE_S 秒交叉淡化进下一段）
+  const endsAt = now + buf.duration;
+  src.start(now);
+  rainActive = { src, gain: fadeGain, idx: nextIdx, endsAt, startedAt: now };
+  // 排程下一段：在 endsAt - CROSSFADE_S 时启动下一段淡入
+  clearTimeout(rainTimer);
+  rainTimer = setTimeout(_scheduleNextRain, (endsAt - now - CROSSFADE_S) * 1000);
+}
+/* ---- 媒体元素模式（file:// 本地打开）---- */
+function _rampElVolume(el, target, durS, done) {
+  clearInterval(el._volT);
+  const from = el.volume, t0 = performance.now(), ms = durS * 1000;
+  el._volT = setInterval(() => {
+    const f = Math.min(1, (performance.now() - t0) / ms);
+    el.volume = Math.max(0, Math.min(1, from + (target - from) * f));
+    if (f >= 1) { clearInterval(el._volT); el._volT = null; if (done) done(); }
+  }, 50);
+}
+function _scheduleNextRainEl(forceIdx) {
+  if (!rainOn || !rainElMode || rainUrls.length === 0 || rainPaused) return;
+  let nextIdx;
+  if (forceIdx !== undefined && forceIdx !== null && rainUrls[forceIdx]) nextIdx = forceIdx;
+  else if (rainUrls.length === 1) nextIdx = 0;
+  else do { nextIdx = Math.floor(Math.random() * rainUrls.length); } while (nextIdx === rainLastIdx);
+  rainLastIdx = nextIdx;
+  const playing = rainElPool.filter(a => !a.paused);
+  let el = rainElPool.find(a => a.paused);
+  if (!el) { el = document.createElement("audio"); el.preload = "auto"; rainElPool.push(el); }
+  let launched = false;
+  const launch = () => {
+    if (launched) return;
+    launched = true;
+    el.oncanplay = null; el.onerror = null;
+    el.volume = 0;
+    const p = el.play();
+    if (p && p.catch) p.catch(() => {});
+    _rampElVolume(el, rainVol, CROSSFADE_S);
+    rainCurEl = el;
+    for (const old of playing) {
+      if (old === el) continue;
+      _rampElVolume(old, 0, CROSSFADE_S, () => old.pause());
+    }
+    const dur = (isFinite(el.duration) && el.duration > 0) ? el.duration : 120;
+    clearTimeout(rainElTimer);
+    rainElTimer = setTimeout(_scheduleNextRainEl, Math.max(2, dur - CROSSFADE_S) * 1000);
+  };
+  el.onerror = () => { setTimeout(_scheduleNextRainEl, 1500); };
+  el.src = rainUrls[nextIdx];
+  el.load();
+  if (el.readyState >= 3) launch();
+  else {
+    el.oncanplay = launch;
+    setTimeout(launch, 3000);  // 兜底：本地文件加载慢也强行启动
+  }
+}
+function startRain() {
+  if (!rainOn) return;
+  if (rainPaused) return;                        // 暂停中：等待用户点继续
+  if (!rainReady) {
+    _initRain().then(() => { if (rainOn && !rainPaused) startRain(); });
+    return;
+  }
+  if (rainCtx && rainCtx.state === "suspended") rainCtx.resume().catch(() => {});
+  if (rainElMode) {
+    if (!rainElPlaying) { rainElPlaying = true; _scheduleNextRainEl(); }
+    return;
+  }
+  if (rainActive) return;   // 已在播放
+  _scheduleNextRain();
+}
+function stopRain() {
+  if (rainElMode) {
+    rainElPlaying = false;
+    clearTimeout(rainElTimer);
+    for (const el of rainElPool) _rampElVolume(el, 0, 0.4, () => el.pause());
+    return;
+  }
+  clearTimeout(rainTimer);
+  rainPausedAt = null;
+  if (rainActive) {
+    try { rainActive.src.stop(); } catch (e) {}
+    rainActive = null;
+  }
+}
+function toggleRain() {
+  rainOn = !rainOn; save("pomo.rainOn", rainOn);
+  if (!rainOn) rainPaused = false;                 // 关闭时清除暂停态（下次开启从头播）
+  updateRainUI();
+  if (rainOn) startRain(); else stopRain();
+}
+/* ---- 雨声：暂停（保留位置）/ 继续 / 随机切歌 ---- */
+function pauseRain() {
+  if (!rainOn || rainPaused) return;
+  rainPaused = true;
+  if (rainElMode) {
+    clearTimeout(rainElTimer);
+    for (const el of rainElPool) {
+      clearInterval(el._volT); el._volT = null;
+      try { el.pause(); } catch (e) {}
+    }
+  } else if (rainActive) {
+    clearTimeout(rainTimer);
+    const elapsed = rainCtx.currentTime - rainActive.startedAt;
+    rainPausedAt = { idx: rainActive.idx, offset: Math.max(0, Math.min(elapsed, rainBuffers[rainActive.idx].duration)) };
+    try { rainActive.src.stop(); } catch (e) {}
+    rainActive = null;
+  }
+  updateRainUI();
+}
+function resumeRain() {
+  if (!rainOn || !rainPaused) return;
+  rainPaused = false;
+  if (rainElMode) {
+    const el = rainCurEl;
+    if (el && el.src) {
+      const p = el.play();
+      if (p && p.catch) p.catch(() => {});
+      const dur = (isFinite(el.duration) && el.duration > 0) ? el.duration : 120;
+      clearTimeout(rainElTimer);
+      rainElTimer = setTimeout(_scheduleNextRainEl, Math.max(2, dur - el.currentTime - CROSSFADE_S) * 1000);
+    } else {
+      _scheduleNextRainEl();
+    }
+  } else if (rainPausedAt && rainBuffers[rainPausedAt.idx]) {
+    const { idx, offset } = rainPausedAt;
+    rainPausedAt = null;
+    const buf = rainBuffers[idx];
+    const src = rainCtx.createBufferSource();
+    src.buffer = buf;
+    const fadeGain = rainCtx.createGain();
+    fadeGain.gain.value = 1;                      // 继续时无需淡入，直接回到音量
+    src.connect(fadeGain);
+    fadeGain.connect(rainChain.filter);
+    const now = rainCtx.currentTime;
+    const remaining = Math.max(1, buf.duration - offset);
+    src.start(now, offset);
+    rainActive = { src, gain: fadeGain, idx, endsAt: now + remaining, startedAt: now - offset };
+    clearTimeout(rainTimer);
+    rainTimer = setTimeout(_scheduleNextRain, (remaining - CROSSFADE_S) * 1000);
+  } else {
+    _scheduleNextRain();
+  }
+  updateRainUI();
+}
+function toggleRainPause() {
+  if (!rainOn) { toggleRain(); return; }          // 未开启时点暂停 = 直接开始播放
+  rainPaused ? resumeRain() : pauseRain();
+}
+function nextRainTrack() {
+  if (!rainOn) { toggleRain(); return; }
+  if (rainPaused) rainPaused = false;
+  if (!rainReady) { _initRain().then(() => { if (rainOn && !rainPaused) startRain(); }); return; }
+  if (rainElMode) {
+    clearTimeout(rainElTimer);
+    _scheduleNextRainEl();                        // 内部会把当前段交叉淡出并随机进下一段
+  } else {
+    _scheduleNextRain(true);                      // manual：立即淡出当前段
+  }
+  updateRainUI();
+}
+function setRainVol(v) {
+  rainVol = v;
+  if (rainChain) rainChain.master.gain.value = rainVol;
+  if (rainElMode) for (const el of rainElPool) {
+    if (!el.paused && !el._volT) el.volume = rainVol;   // 淡入淡出进行中的元素不动
+  }
+  const fr = document.getElementById("focusRainVol");
+  if (fr) fr.value = Math.round(rainVol * 100);
+  save("pomo.rainVol", rainVol);
+}
+function updateRainUI() {
+  const fr = document.getElementById("focusRainBtn");
+  if (fr) { fr.textContent = rainOn ? "🌧" : "🔇"; fr.style.opacity = rainOn ? "1" : ".55"; }
+  const ps = document.getElementById("focusRainPauseBtn");
+  if (ps) {
+    ps.textContent = rainPaused ? "▶" : "⏸";
+    ps.title = rainPaused ? "继续雨声" : "暂停雨声";
+    ps.style.opacity = rainOn ? "1" : ".55";
+  }
+  const nx = document.getElementById("focusRainNextBtn");
+  if (nx) { nx.style.opacity = rainOn ? "1" : ".55"; }
+}
+/* ---- rainylofi 曲目选择面板 ---- */
+function _curRainIdx() {
+  // 当前播放曲目在 RAIN_FILES 中的索引（未播放返回 -1）
+  if (rainElMode) return rainLastIdx;
+  if (rainActive) return RAIN_FILES.indexOf(rainBufferNames[rainActive.idx]);
+  return -1;
+}
+function playRainAt(fileIdx) {
+  // 从指定曲目开始播放（RAIN_FILES 索引）；未开启时自动开启
+  if (fileIdx < 0 || fileIdx >= RAIN_FILES.length) return;
+  if (!rainOn) { rainOn = true; save("pomo.rainOn", rainOn); }
+  rainPaused = false;
+  updateRainUI();
+  const go = () => {
+    if (rainElMode) {
+      clearTimeout(rainElTimer);
+      _scheduleNextRainEl(fileIdx);
+    } else {
+      // Web Audio 模式：个别文件加载失败时 rainBuffers 与 RAIN_FILES 索引不连续，按名字映射
+      const bi = rainBufferNames.indexOf(RAIN_FILES[fileIdx]);
+      _scheduleNextRain(true, bi >= 0 ? bi : undefined);
+    }
+  };
+  if (!rainReady) { _initRain().then(() => { if (rainOn && !rainPaused) go(); }); return; }
+  if (rainCtx && rainCtx.state === "suspended") rainCtx.resume().catch(() => {});
+  go();
+}
+function renderRainPop() {
+  const pop = document.getElementById("rainTrackPop");
+  if (!pop) return;
+  const cur = _curRainIdx();
+  pop.innerHTML = "";
+  RAIN_FILES.forEach((base, i) => {
+    const item = document.createElement("div");
+    item.className = "track-item" + (i === cur ? " active" : "");
+    const name = document.createElement("span");
+    name.textContent = RAIN_NAMES[base] || base;
+    item.appendChild(name);
+    if (i === cur) {
+      const playing = document.createElement("span");
+      playing.className = "track-playing";
+      playing.textContent = rainPaused ? "已暂停" : "正在播放";
+      item.appendChild(playing);
+    }
+    item.onclick = () => { playRainAt(i); renderRainPop(); };
+    pop.appendChild(item);
+  });
+}
+function toggleRainPop() {
+  const pop = document.getElementById("rainTrackPop");
+  if (!pop) return;
+  if (pop.classList.contains("open")) { pop.classList.remove("open"); return; }
+  renderRainPop();
+  pop.classList.add("open");
+}
+
+/* ---- 专注页底部名人名句 ---- */
+const QUOTES = [
+  ["愿中国青年都摆脱冷气，只是向上走，不必听自暴自弃者流的话。", "鲁迅"],
+  ["且视他人之疑目如盏盏鬼火，大胆地去走你的夜路。", "史铁生"],
+  ["那一天我二十一岁，在我一生的黄金时代。", "王小波"],
+  ["世界上只有一种真正的英雄主义，就是认清生活真相之后依然热爱生活。", "罗曼·罗兰"],
+  ["在隆冬，我终于知道，我身上有一个不可战胜的夏天。", "加缪"],
+  ["满地都是六便士，他却抬头看见了月亮。", "毛姆"],
+  ["生活总让我们遍体鳞伤，但到后来，那些受伤的地方一定会变成我们最强壮的地方。", "海明威"],
+  ["真正重要的东西，用眼睛是看不见的。", "圣埃克苏佩里《小王子》"],
+  ["每一个不曾起舞的日子，都是对生命的辜负。", "尼采"],
+  ["竹杖芒鞋轻胜马，谁怕？一蓑烟雨任平生。", "苏轼《定风波》"],
+  ["你未看此花时，此花与汝心同归于寂。", "王阳明《传习录》"],
+  ["人生最曼妙的风景，竟是内心的淡定与从容。", "杨绛"],
+  ["生活不能等待别人来安排，要自己去争取和奋斗。", "路遥《平凡的世界》"],
+  ["人是为活着本身而活着，而不是为了活着之外的任何事物所活着。", "余华《活着》"],
+  ["天空没有留下鸟的痕迹，但我已飞过。", "泰戈尔《飞鸟集》"],
+  ["对每个人而言，真正的职责只有一个：找到自我。", "黑塞《德米安》"],
+  ["当你穿过了暴风雨，你早已不再是原来那个人。", "村上春树《海边的卡夫卡》"],
+  ["岁月不饶人，我亦未曾饶过岁月。", "木心"],
+  ["我步入丛林，因为我希望生活得有意义。", "梭罗《瓦尔登湖》"],
+  ["所有命运赠送的礼物，早已在暗中标好了价格。", "茨威格《断头王后》"],
+  ["路漫漫其修远兮，吾将上下而求索。", "屈原《离骚》"],
+  ["如果有天堂，天堂应该是图书馆的模样。", "博尔赫斯"],
+  ["过去都是假的，回忆是一条没有归途的路。", "马尔克斯《百年孤独》"],
+  ["凡事都有偶然的凑巧，结果却又如宿命的必然。", "沈从文《边城》"],
+  ["不要试图成为一个成功的人，而要努力成为一个有价值的人。", "爱因斯坦"],
+  ["不管前方的路有多苦，只要走的方向正确，都比站在原地更接近幸福。", "宫崎骏《千与千寻》"],
+  ["生活坏到一定程度就会好起来，因为它无法更坏。", "宫崎骏《龙猫》"],
+  ["人不是什么时候都能活得光明正大，本想挺直腰杆前进，却总会有低头的时候。", "坂田银时《银魂》"],
+  ["每个人都依靠自己的知识和认知活着，并且也被其束缚着。", "宇智波鼬《火影忍者》"],
+  ["我不是天生的王者，但我骨子里流着不服输的血液。", "蒙奇·D·路飞《海贼王》"],
+  ["自己做出的选择就不要后悔，挺起胸膛前进吧。", "利威尔《进击的巨人》"],
+  ["人不牺牲就没有获得，想得到什么就必须付出同等的代价。", "《钢之炼金术师》"],
+  ["现在放弃的话，比赛就结束了。", "安西教练《灌篮高手》"],
+  ["隐约雷鸣，阴霾天空，但盼风雨来，能留你在此。", "新海诚《言叶之庭》"],
+  ["重要的人，不想忘记的人，绝对不能忘的人！", "新海诚《你的名字》"],
+  ["我一直在寻找的，不过是那一份温柔。", "夏目贵志《夏目友人帐》"],
+  ["纵使心肺停止，我依然会向前迈进。", "炼狱杏寿郎《鬼灭之刃》"],
+  ["话语是会留下来的，比任何东西都更久。", "《紫罗兰永恒花园》"],
+  ["正因为我有能力跨越，考验才会降临。", "《紫罗兰永恒花园》"]
+];
+let quoteIdx = -1;
+function showQuote() {
+  const t = $("quoteText"), a = $("quoteAuthor");
+  if (!t) return;
+  let next;
+  do { next = Math.floor(Math.random() * QUOTES.length); }
+  while (QUOTES.length > 1 && next === quoteIdx);
+  quoteIdx = next;
+  t.textContent = "「" + QUOTES[next][0] + "」";
+  a.textContent = "—— " + QUOTES[next][1];
+}
+
+
+function openFocusPage() {
+  if (customBgUrl) setFocusBg(customBgUrl);       // 自定义背景优先
+  else if (bgIndex >= 0 && bgIndex < BG_FILES.length) tryBg(bgIndex, true);
+  else pickRandomBg();
+  focusPage.classList.add("show");
+  document.body.style.overflow = "hidden";
+  updateRainUI();
+  startRain();
+  renderTimer();
+}
+function closeFocusPage() {
+  focusPage.classList.remove("show");
+  document.body.style.overflow = "";
+  // 雨声不停止：返回主页后继续播放
+  renderTimer();
+}
+
+function renderStartCard() {
+  const t = tasks.find(x => x.id === currentTaskId);
+  if (running) {
+    $("startTitle").textContent = "⏳ " + PHASES[phase].label + "中 · " + $("timeDisplay").textContent;
+    $("startSub").textContent = t ? "正在专注：" + t.name : "计时进行中";
+    $("openFocusBtn").textContent = "返回专注页";
+  } else {
+    $("startTitle").textContent = t ? "🎯 " + t.name : "准备开始专注";
+    $("startSub").textContent = t ? "已为该任务完成 " + t.pomos + " 个番茄 · 时长在设置中调整" : "点击任务右侧\u201c专注\u201d选定任务，或直接开始";
+    $("openFocusBtn").textContent = "▶ 开始专注";
+  }
+}
+
+/* ================= 主题 ================= */
+function applyTheme(t) {
+  document.documentElement.dataset.theme = t;
+  $("themeBtn").textContent = t === "dark" ? "☀️" : "🌙";
+  save("pomo.theme", t);
+  applyRingColors();
+  renderTimer();
+}
+
+/* ================= 设置弹窗 ================= */
+function openSettings() {
+  $("setFocus").value = settings.focus;
+  $("setShort").value = settings.short;
+  $("setLong").value = settings.long;
+  $("setInterval").value = settings.longInterval;
+  $("setAutoFocus").checked = settings.autoFocus;
+  $("setAutoBreak").checked = settings.autoBreak;
+  $("setNotify").checked = settings.notify;
+  const theme = document.documentElement.dataset.theme || "light";
+  const colors = (settings.ringColors && settings.ringColors[theme]) || DEFAULT_RING_COLORS[theme];
+  $("setRingFocus").value = colors.focus;
+  $("setRingShort").value = colors.short;
+  $("setRingLong").value  = colors.long;
+  $("settingsMask").classList.add("show");
+}
+function saveSettingsForm() {
+  const clamp = (v, min, max, def) => { v = parseInt(v, 10); return isNaN(v) ? def : Math.min(max, Math.max(min, v)); };
+  settings.focus = clamp($("setFocus").value, 1, 120, 25);
+  settings.short = clamp($("setShort").value, 1, 60, 5);
+  settings.long  = clamp($("setLong").value,  1, 90, 15);
+  settings.longInterval = clamp($("setInterval").value, 2, 10, 4);
+  settings.autoFocus = $("setAutoFocus").checked;
+  settings.autoBreak = $("setAutoBreak").checked;
+  settings.notify = $("setNotify").checked;
+  // 进度环颜色：按当前主题保存
+  const theme = document.documentElement.dataset.theme || "light";
+  settings.ringColors = settings.ringColors || {};
+  settings.ringColors[theme] = {
+    focus: $("setRingFocus").value,
+    short: $("setRingShort").value,
+    long:  $("setRingLong").value
+  };
+  if (settings.notify) requestNotifyPermission();
+  save("pomo.settings", settings);
+  if (!running) { remainingMs = phaseDurationMs(phase); renderTimer(); }
+  applyRingColors();
+  $("settingsMask").classList.remove("show");
+  showToast("设置已保存");
+}
+
+/* ================= 事件绑定 ================= */
+$("startBtn").onclick = () => running ? pause() : start();
+$("resetBtn").onclick = reset;
+$("skipBtn").onclick = skip;
+document.querySelectorAll(".mode-btn").forEach(b => b.onclick = () => {
+  if (running) pause();
+  setPhase(b.dataset.mode, false);
+});
+
+// 专注页控制
+$("focusBackBtn").onclick = closeFocusPage;
+$("openFocusBtn").onclick = openFocusPage;
+$("bgShuffleBtn").onclick = pickRandomBg;
+// 误绑不存在的 ID 会在严格模式下抛 TypeError，中断后续脚本（日历曾因此失效）
+// 专注页综合背景音控件
+$("focusRainBtn").onclick = toggleRain;
+$("focusRainPauseBtn").onclick = toggleRainPause;
+$("focusRainNextBtn").onclick = nextRainTrack;
+$("focusRainVol").oninput = e => setRainVol(e.target.value / 100);
+// 曲目选择面板
+$("focusRainListBtn").onclick = e => { e.stopPropagation(); toggleRainPop(); };
+document.addEventListener("click", e => {
+  const pop = document.getElementById("rainTrackPop");
+  if (pop && pop.classList.contains("open") && !pop.contains(e.target)) pop.classList.remove("open");
+});
+
+// 专注页底部名人名句
+$("quoteShuffleBtn").onclick = showQuote;
+showQuote();
+
+$("addTaskBtn").onclick = addTask;
+$("taskInput").addEventListener("keydown", e => { if (e.key === "Enter") addTask(); });
+
+// 日历
+$("calPrev").onclick = () => { calViewM--; if (calViewM < 0) { calViewM = 11; calViewY--; } renderCalendar(); };
+$("calNext").onclick = () => { calViewM++; if (calViewM > 11) { calViewM = 0; calViewY++; } renderCalendar(); };
+$("calToday").onclick = () => { const n = new Date(); calViewY = n.getFullYear(); calViewM = n.getMonth(); selectedDate = dateKeyOf(calViewY, calViewM, n.getDate()); renderCalendar(); };
+$("addCalTodo").onclick = addCalTodo;
+$("calTodoInput").addEventListener("keydown", e => { if (e.key === "Enter") addCalTodo(); });
+
+$("themeBtn").onclick = () => applyTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark");
+$("settingsBtn").onclick = openSettings;
+$("saveSettings").onclick = saveSettingsForm;
+$("cancelSettings").onclick = () => $("settingsMask").classList.remove("show");
+$("settingsMask").addEventListener("click", e => { if (e.target === e.currentTarget) $("settingsMask").classList.remove("show"); });
+$("resetRingColors").onclick = resetRingColors;
+$("uploadBgBtn").onclick = () => $("bgFileInput").click();
+$("bgFileInput").addEventListener("change", handleBgUpload);
+$("clearBgBtn").onclick = clearCustomBg;
+
+// 空格：开始/暂停（专注页未打开时先打开专注页）；Esc：关闭专注页
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape" && focusPage.classList.contains("show")) { closeFocusPage(); return; }
+  if (e.code === "Space" && !["INPUT", "TEXTAREA", "BUTTON"].includes(document.activeElement.tagName)) {
+    e.preventDefault();
+    if (!focusPage.classList.contains("show")) { openFocusPage(); return; }
+    running ? pause() : start();
+  }
+});
+
+/* ================= 启动 ================= */
+applyTheme(load("pomo.theme", "light"));
+updateRainUI();
+setRainVol(rainVol);   // 同步主页与专注页雨声音量滑块（不保存副作用，值相同）
+setPhase("focus", false);
+renderTasks();
+renderStats();
+initCalendar();
+renderCalendar();
+initDb().then(loadCustomBg);
+</script>
+</body>
+</html>
